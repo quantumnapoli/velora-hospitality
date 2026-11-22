@@ -52,12 +52,13 @@ const Icon = ({ name }) => <svg className="icon" viewBox="0 0 24 24" aria-hidden
 const frameUrl = index => `${sequence.path}/${String(index + 1).padStart(4, '0')}.webp`
 const clamp01 = value => Math.min(1, Math.max(0, value))
 // la sequenza occupa questo tratto dello scroll; prima e dopo restano fermi primo e ultimo fotogramma
-const SEQ_START = .05, SEQ_END = .9
+const SEQ_START = .05, SEQ_END = .92
 const chapters = [
   { from: 0, to: .1, eyebrow: null },
-  { from: .14, to: .38, eyebrow: '01 · Stampa 3D', title: <>Strato dopo strato,<br /><em>prende forma.</em></>, text: 'Ogni vaso nasce da una stampa 3D ad alta risoluzione: le onde scultoree escono dal materiale minerale, senza stampi.' },
-  { from: .46, to: .62, eyebrow: '02 · Il tuo marchio', title: <>Il logo,<br /><em>inciso nella materia.</em></>, text: 'Il marchio della struttura viene scavato nel medaglione, nello stesso colore del vaso: discreto, permanente.' },
-  { from: .74, to: 1.01, eyebrow: '03 · In suite', title: <>Pronto per<br /><em>i tuoi ospiti.</em></>, text: 'Dalla stampante alla camera: un oggetto unico che porta la tua identità in ogni stanza.' },
+  { from: .13, to: .29, eyebrow: '01 · Stampa 3D', title: <>Strato dopo strato,<br /><em>prende forma.</em></>, text: 'Ogni vaso nasce da una stampa 3D ad alta risoluzione: le onde scultoree escono dal materiale minerale, senza stampi.' },
+  { from: .35, to: .49, eyebrow: '02 · Il tuo marchio', title: <>Il logo,<br /><em>inciso nella materia.</em></>, text: 'Il marchio della struttura viene scavato nel medaglione, nello stesso colore del vaso: discreto, permanente.' },
+  { from: .56, to: .69, eyebrow: '03 · In suite', title: <>Dalla stampante<br /><em>alla tua suite.</em></>, text: 'Un oggetto unico che porta la tua identità in ogni stanza, dalla hall alla camera.' },
+  { from: .8, to: 1.01, eyebrow: '04 · Benvenuti', title: <>Pronto per<br /><em>i tuoi ospiti.</em></>, text: 'Vasi, accessori e segnaletica coordinati, con il tuo marchio inciso.' },
 ]
 const fade = (p, from, to, edge = .04) => clamp01(Math.min((p - from) / edge + 1, (to - p) / edge + 1))
 
@@ -175,11 +176,11 @@ function Hero() {
         <h1 id="hero-title">Oggetti scultorei<br />con il <em>tuo marchio</em>,<br />stampati in 3D.</h1>
         <p>Vasi e accessori per hotel, resort e spazi esclusivi. Scorri per vedere come nasce un pezzo Velora.</p>
       </div>
-      {chapters.slice(1).map((chapter, i) => <div key={chapter.eyebrow} className={`story-chapter${i === 2 ? ' last' : ''}`} ref={el => (layers.current[i + 1] = el)}>
+      {chapters.slice(1).map((chapter, i) => <div key={chapter.eyebrow} className={`story-chapter${i === chapters.length - 2 ? ' last' : ''}`} ref={el => (layers.current[i + 1] = el)}>
         <span className="eyebrow">{chapter.eyebrow}</span>
         <h2>{chapter.title}</h2>
         <p>{chapter.text}</p>
-        {i === 2 && <div className="hero-actions">
+        {i === chapters.length - 2 && <div className="hero-actions">
           <a className="button light" href="#configura">Carica il tuo logo <span aria-hidden="true">↓</span></a>
           <a className="hero-link" href="#collezione">Scopri la collezione</a>
         </div>}

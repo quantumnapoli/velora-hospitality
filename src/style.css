@@ -79,7 +79,7 @@ h2 em, h1 em { font-style: italic; color: var(--gold); }
 
 /* ───────── Hero ───────── */
 /* ───────── Hero: storia guidata dallo scroll ───────── */
-.story { position: relative; height: 560vh; background: #1c1612; color: var(--cream); }
+.story { position: relative; height: 720vh; background: #1c1612; color: var(--cream); }
 .story-sticky { position: sticky; top: 0; height: 100svh; overflow: hidden; }
 .story-canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 1s ease; }
 .story-canvas.ready { opacity: 1; }
