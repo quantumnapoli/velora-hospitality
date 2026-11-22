@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { collection, demoMark, finishes, heroFont, markTones, product, sectors } from './catalog'
+import { collection, finishes, markTones, product, sectors } from './catalog'
+import sequence from './sequence.json'
 import './style.css'
 
 const find = (list, id) => list.find(item => item.id === id) ?? list[0]
@@ -42,36 +43,134 @@ const icons = {
 }
 const Icon = ({ name }) => <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">{icons[name]}</svg>
 
-/* ───────────────────────── Hero ───────────────────────── */
+/* ───────────────────────── Hero: storia guidata dallo scroll ───────────────────────── */
+
+/**
+ * Sequenza di fotogrammi (stampa 3D → logo inciso → suite) disegnata su canvas in base allo scroll.
+ * I fotogrammi arrivano da `npm run sequence` (clip Higgsfield → FFmpeg → WebP).
+ */
+const frameUrl = index => `${sequence.path}/${String(index + 1).padStart(4, '0')}.webp`
+const clamp01 = value => Math.min(1, Math.max(0, value))
+// la sequenza occupa questo tratto dello scroll; prima e dopo restano fermi primo e ultimo fotogramma
+const SEQ_START = .05, SEQ_END = .9
+const chapters = [
+  { from: 0, to: .1, eyebrow: null },
+  { from: .14, to: .38, eyebrow: '01 · Stampa 3D', title: <>Strato dopo strato,<br /><em>prende forma.</em></>, text: 'Ogni vaso nasce da una stampa 3D ad alta risoluzione: le onde scultoree escono dal materiale minerale, senza stampi.' },
+  { from: .46, to: .62, eyebrow: '02 · Il tuo marchio', title: <>Il logo,<br /><em>inciso nella materia.</em></>, text: 'Il marchio della struttura viene scavato nel medaglione, nello stesso colore del vaso: discreto, permanente.' },
+  { from: .74, to: 1.01, eyebrow: '03 · In suite', title: <>Pronto per<br /><em>i tuoi ospiti.</em></>, text: 'Dalla stampante alla camera: un oggetto unico che porta la tua identità in ogni stanza.' },
+]
+const fade = (p, from, to, edge = .04) => clamp01(Math.min((p - from) / edge + 1, (to - p) / edge + 1))
 
 function Hero() {
-  const stage = useRef(null)
+  const section = useRef(null)
+  const canvas = useRef(null)
+  const layers = useRef([])
+  const bar = useRef(null)
+  const hint = useRef(null)
   const [ready, setReady] = useState(false)
+
   useEffect(() => {
-    let dispose, alive = true
-    import('./three/hero.js').then(({ mountHero }) => alive && mountHero(stage.current, {
-      product, finish: find(finishes, product.finish), mark: demoMark, font: heroFont, onReady: () => alive && setReady(true),
-    })).then(cleanup => { if (alive) dispose = cleanup; else cleanup?.() }).catch(() => {})
-    return () => { alive = false; dispose?.() }
+    if (!sequence.count) return
+    const images = new Array(sequence.count)
+    const ctx = canvas.current.getContext('2d')
+    let current = -1, frame = 0, alive = true, raf = 0
+
+    const nearest = index => {
+      for (let d = 0; d < sequence.count; d++) {
+        if (images[index - d]?.complete && images[index - d].naturalWidth) return images[index - d]
+        if (images[index + d]?.complete && images[index + d].naturalWidth) return images[index + d]
+      }
+      return null
+    }
+    const draw = force => {
+      const image = nearest(frame)
+      if (!image || (!force && current === frame && image === images[frame])) return
+      current = frame
+      const { width, height } = canvas.current
+      // cover centrato: il vaso resta al centro anche su schermi verticali
+      const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight)
+      const w = image.naturalWidth * scale, h = image.naturalHeight * scale
+      ctx.drawImage(image, (width - w) / 2, (height - h) / 2, w, h)
+    }
+    const resize = () => {
+      const ratio = Math.min(window.devicePixelRatio || 1, 2)
+      canvas.current.width = Math.round(canvas.current.clientWidth * ratio)
+      canvas.current.height = Math.round(canvas.current.clientHeight * ratio)
+      draw(true)
+    }
+    const update = () => {
+      raf = 0
+      const rect = section.current.getBoundingClientRect()
+      const p = clamp01(-rect.top / Math.max(1, rect.height - window.innerHeight))
+      frame = Math.round(clamp01((p - SEQ_START) / (SEQ_END - SEQ_START)) * (sequence.count - 1))
+      draw(false)
+      chapters.forEach((chapter, i) => {
+        const el = layers.current[i]
+        if (!el) return
+        const o = i === 0 ? clamp01(1 - (p - chapter.to + .04) / .06) : fade(p, chapter.from, chapter.to)
+        el.style.opacity = o
+        el.style.transform = `translateY(${(1 - o) * 24}px)`
+        el.style.visibility = o > .01 ? 'visible' : 'hidden'
+      })
+      if (bar.current) bar.current.style.transform = `scaleX(${p})`
+      if (hint.current) hint.current.style.opacity = clamp01(1 - p * 12)
+    }
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update) }
+
+    // caricamento progressivo: prima un fotogramma ogni 8, poi si infittisce
+    const order = []
+    for (const step of [8, 4, 2, 1]) for (let i = 0; i < sequence.count; i += step) if (!order.includes(i)) order.push(i)
+    let next = 0
+    const load = () => {
+      if (!alive || next >= order.length) return
+      const index = order[next++]
+      const image = new Image()
+      image.decoding = 'async'
+      image.onload = () => {
+        if (!alive) return
+        if (index === 0) setReady(true)
+        if (Math.abs(index - frame) < 6) draw(true)
+        load()
+      }
+      image.onerror = load
+      image.src = frameUrl(index)
+      images[index] = image
+    }
+    for (let i = 0; i < 6; i++) load()
+
+    resize()
+    update()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', resize)
+    return () => {
+      alive = false
+      cancelAnimationFrame(raf)
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', resize)
+    }
   }, [])
-  return <section className="hero" id="top" aria-labelledby="hero-title">
-    <div className="hero-glow" aria-hidden="true" />
-    <div className="hero-copy">
-      <Logo />
-      <span className="tricolore" aria-hidden="true"><i /><i /><i /></span>
-      <h1 id="hero-title">Oggetti scultorei<br />con il <em>tuo marchio</em>,<br />stampati in 3D.</h1>
-      <p>Vasi e accessori per hotel, resort e spazi esclusivi. Carica il logo della tua struttura e scegli il colore: lo vedi subito sul vaso in 3D e ricevi un'immagine fotorealistica del pezzo finito, con il logo inciso.</p>
-      <div className="hero-actions">
-        <a className="button light" href="#configura">Carica il tuo logo <span aria-hidden="true">↓</span></a>
-        <a className="hero-link" href="#collezione">Scopri la collezione</a>
+
+  return <section className="story" id="top" ref={section} aria-labelledby="hero-title">
+    <div className="story-sticky">
+      <canvas ref={canvas} className={`story-canvas${ready ? ' ready' : ''}`} aria-hidden="true" />
+      <div className="story-shade" aria-hidden="true" />
+      <div className="story-intro" ref={el => (layers.current[0] = el)}>
+        <Logo />
+        <span className="tricolore" aria-hidden="true"><i /><i /><i /></span>
+        <h1 id="hero-title">Oggetti scultorei<br />con il <em>tuo marchio</em>,<br />stampati in 3D.</h1>
+        <p>Vasi e accessori per hotel, resort e spazi esclusivi. Scorri per vedere come nasce un pezzo Velora.</p>
       </div>
-      <ul className="hero-points">
-        {[['cube', 'Design esclusivo'], ['leaf', 'Materiali sostenibili'], ['sliders', 'Personalizzazione totale'], ['infinity', 'Collezioni modulari']].map(([icon, label]) =>
-          <li key={label}><Icon name={icon} />{label}</li>)}
-      </ul>
-    </div>
-    <div className={`hero-stage${ready ? ' ready' : ''}`} ref={stage}>
-      <span className="hero-caption">{product.name} · {find(finishes, product.finish).name} · logo inciso</span>
+      {chapters.slice(1).map((chapter, i) => <div key={chapter.eyebrow} className={`story-chapter${i === 2 ? ' last' : ''}`} ref={el => (layers.current[i + 1] = el)}>
+        <span className="eyebrow">{chapter.eyebrow}</span>
+        <h2>{chapter.title}</h2>
+        <p>{chapter.text}</p>
+        {i === 2 && <div className="hero-actions">
+          <a className="button light" href="#configura">Carica il tuo logo <span aria-hidden="true">↓</span></a>
+          <a className="hero-link" href="#collezione">Scopri la collezione</a>
+        </div>}
+      </div>)}
+      <div className="story-hint" ref={hint} aria-hidden="true"><span>Scorri</span><i /></div>
+      <div className="story-progress" aria-hidden="true"><i ref={bar} /></div>
     </div>
   </section>
 }

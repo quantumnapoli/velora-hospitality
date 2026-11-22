@@ -1,23 +1,10 @@
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, rm } from 'node:fs/promises'
 import * as esbuild from 'esbuild'
 
 const serve = process.argv.includes('--serve')
 await rm('dist', { recursive: true, force: true })
-await mkdir('dist/fonts', { recursive: true })
+await mkdir('dist', { recursive: true })
 await cp('public', 'dist', { recursive: true })
-
-// Font tipografici per i marchi in rilievo: solo i glifi latini (riduce ~70% del peso).
-const fonts = {
-  serif: 'node_modules/three/examples/fonts/droid/droid_serif_regular.typeface.json',
-}
-for (const [name, path] of Object.entries(fonts)) {
-  const font = JSON.parse(await readFile(path, 'utf8'))
-  font.glyphs = Object.fromEntries(Object.entries(font.glyphs).filter(([char]) => {
-    const code = char.codePointAt(0)
-    return code >= 0x20 && code <= 0x17f || '’‘“”–—·•€'.includes(char)
-  }))
-  await writeFile(`dist/fonts/${name}.json`, JSON.stringify(font))
-}
 
 const options = {
   entryPoints: { app: 'src/app.jsx' },

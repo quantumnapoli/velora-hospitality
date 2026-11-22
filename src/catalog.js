@@ -11,9 +11,6 @@ export const markTones = [
   { id: 'oro', name: 'Oro satinato', color: '#c59b5f', roughness: .32, metalness: .9 },
 ]
 
-/** Carattere del marchio d'esempio mostrato nella hero. */
-export const heroFont = '/fonts/serif.json'
-
 /**
  * Prodotto standard mostrato nel configuratore. Tutto è fissato da Velora: il cliente carica solo il logo.
  * - `model`: GLB con asse Y in alto, riscalato all'altezza reale `height` (mm).
@@ -43,8 +40,6 @@ export const product = {
 }
 
 export const products = [product]
-
-export const demoMark = { line1: 'GRAND HOTEL', line2: "PARKER'S", stars: 5 }
 
 export const collection = [
   ['Vasi scultorei', 'Elementi iconici per hall e suite', 'vases'],
