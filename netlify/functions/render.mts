@@ -60,6 +60,9 @@ export default async (req: Request, context: Context) => {
       body: JSON.stringify({
         model: Netlify.env.get('OPENROUTER_IMAGE_MODEL') || DEFAULT_MODEL,
         prompt,
+        aspect_ratio: '4:5',
+        quality: 'high',
+        output_format: 'jpeg',
         input_references: [
           { type: 'image_url', image_url: { url: reference } },
           { type: 'image_url', image_url: { url: body.logo } },

@@ -401,7 +401,7 @@ function App() {
         </div>
         <div className="collection-grid">
           {collection.map(([name, text, image]) => <article key={name} className="collection-card">
-            <img src={`/images/${image}.webp`} alt={name} loading="lazy" width="230" height="205" />
+            <img src={`/images/${image}.webp`} alt={name} loading="lazy" width="640" height="640" />
             <h3>{name}</h3><p>{text}</p>
           </article>)}
         </div>
