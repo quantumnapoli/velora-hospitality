@@ -47,7 +47,7 @@ export async function mountHero(container, { product, finish, mark, font, onRead
     const polygons = textPolygons(typeface, [{ text: mark.line1, size: 14 }, { text: mark.line2, size: 30 }], mark.stars)
     const base = extrudeMark(polygons)
     const field = surfaceField(root, 768, 480)
-    const geometry = wrapOnSurface(base.geometry, field, { theta: 0, height: h * product.mark.heightPct / 100, size: product.mark.size / 1000, depth: .0012 })
+    const geometry = wrapOnSurface(base.geometry, field, { theta: 0, height: h * product.mark.heightPct / 100, size: product.mark.box.w / 1000, depth: .0012 })
     base.geometry.dispose()
     const material = new THREE.MeshStandardMaterial()
     applyFinish([material], { color: '#4a4038', roughness: .5 }, .16)

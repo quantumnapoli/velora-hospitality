@@ -12,8 +12,9 @@ const MM = .001
  * un medaglione opzionale. Tutte le misure reali sono in millimetri lato interfaccia.
  */
 export class Studio {
-  constructor(container, { onStatus = () => {}, onPlacement = () => {}, onMeasure = () => {} } = {}) {
+  constructor(container, { onStatus = () => {}, onPlacement = () => {}, onMeasure = () => {}, draggable = true } = {}) {
     this.container = container
+    this.draggable = draggable
     this.onMeasure = onMeasure
     this.onStatus = onStatus
     this.onPlacement = onPlacement
@@ -157,24 +158,33 @@ export class Studio {
     this.dirty = true
   }
 
-  /** Dimensioni reali del marchio e del medaglione, in metri. */
+  /**
+   * Dimensioni reali del marchio e del medaglione, in metri.
+   * Con `box` (mm) il logo viene inscritto nell'area stabilita per il prodotto, senza deformarlo;
+   * con `medallion: { w, h }` (mm) il medaglione ha misura fissa, anche prima del caricamento del logo.
+   */
   dimensions() {
-    const { size, medallion } = this.placement
-    if (!this.markBase) return null
-    const w = this.markBase.width * size * MM, h = this.markBase.height * size * MM
-    const medal = medallion ? { w: w * 1.24 + 9 * MM, h: h * 1.42 + 9 * MM } : null
-    return { w, h, medal }
+    const { size, box, medallion } = this.placement
+    let w = 0, h = 0
+    if (this.markBase) {
+      const scale = box ? Math.min(box.w / this.markBase.width, box.h / this.markBase.height) : size
+      w = this.markBase.width * scale * MM; h = this.markBase.height * scale * MM
+    }
+    const medal = medallion?.w ? { w: medallion.w * MM, h: medallion.h * MM }
+      : medallion && this.markBase ? { w: w * 1.24 + 9 * MM, h: h * 1.42 + 9 * MM } : null
+    if (!this.markBase && !medal) return null
+    return { w, h, size: this.markBase ? Math.max(w, h) / Math.max(this.markBase.width, this.markBase.height) : 0, medal, mark: !!this.markBase }
   }
 
   rebuild() {
     this.dirty = false
     if (!this.field) return
     const dims = this.dimensions()
-    this.markMesh.visible = !!dims
+    this.markMesh.visible = !!dims?.mark
     this.medalMesh.visible = !!dims?.medal
     this.onMeasure(dims && { w: dims.w * 1000, h: dims.h * 1000, medal: dims.medal && { w: dims.medal.w * 1000, h: dims.medal.h * 1000 } })
     if (!dims) return
-    const { angle, heightPct, size, depth } = this.placement
+    const { angle, heightPct, depth } = this.placement
     const theta = ((angle / 360) * TAU % TAU + TAU) % TAU
     // tiene l'ingombro all'interno della superficie utile
     const [lo, hi] = this.field.valid(theta)
@@ -200,8 +210,9 @@ export class Studio {
       this.medalMesh.geometry.dispose()
       this.medalMesh.geometry = geometry
     }
+    if (!dims.mark) return
     const geometry = wrapOnSurface(this.markBase.geometry, this.field, {
-      theta, height, size: size * MM, depth: depth * MM, lift: dims.medal ? medalLift : 0,
+      theta, height, size: dims.size, depth: depth * MM, lift: dims.medal ? medalLift : 0,
     })
     this.markMesh.geometry.dispose()
     this.markMesh.geometry = geometry
@@ -258,7 +269,7 @@ export class Studio {
       return this.raycaster.intersectObjects(objects.filter(Boolean), true)[0]
     }
     this.onDown = event => {
-      if (!this.markMesh.visible) return
+      if (!this.draggable || !this.markMesh.visible) return
       const hit = cast(event, [this.markMesh, this.medalMesh.visible && this.medalMesh])
       if (!hit) return
       this.dragging = true
@@ -269,7 +280,7 @@ export class Studio {
     }
     this.onMove = event => {
       if (!this.dragging) {
-        if (event.pointerType === 'mouse' && this.markMesh.visible) {
+        if (this.draggable && event.pointerType === 'mouse' && this.markMesh.visible) {
           canvas.style.cursor = cast(event, [this.markMesh, this.medalMesh.visible && this.medalMesh]) ? 'grab' : ''
         }
         return
@@ -310,6 +321,41 @@ export class Studio {
       this.resize()
       resolve(blob)
     }, 'image/png'))
+  }
+
+  /**
+   * Vista frontale fissa del prodotto con il marchio, indipendente da dove l'utente ha ruotato la camera:
+   * è il riferimento passato al generatore d'immagine.
+   */
+  shot(size = 1024, type = 'image/jpeg') {
+    if (this.dirty) this.rebuild()
+    const saved = { position: this.camera.position.clone(), target: this.controls.target.clone(), tween: this.tween, autoRotate: this.controls.autoRotate }
+    this.tween = null
+    const h = this.heightM
+    const theta = this.markCenter?.theta ?? 0
+    const distance = (h * .6) / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))
+    this.camera.position.set(Math.sin(theta) * distance, h * .5, Math.cos(theta) * distance)
+    this.controls.target.set(0, h * .47, 0)
+    this.camera.lookAt(this.controls.target)
+    const { domElement } = this.renderer
+    const ratio = this.renderer.getPixelRatio()
+    this.renderer.setPixelRatio(1)
+    this.renderer.setSize(size, size, false)
+    this.camera.aspect = 1
+    this.camera.updateProjectionMatrix()
+    // fondo neutro: il JPEG non ha trasparenza
+    const background = this.scene.background
+    this.scene.background = new THREE.Color('#ece3d7')
+    this.renderer.render(this.scene, this.camera)
+    this.scene.background = background
+    return new Promise(resolve => domElement.toBlob(blob => {
+      this.camera.position.copy(saved.position)
+      this.controls.target.copy(saved.target)
+      this.tween = saved.tween
+      this.renderer.setPixelRatio(ratio)
+      this.resize()
+      resolve(blob)
+    }, type, .9))
   }
 
   async exportSTL() {

@@ -11,35 +11,37 @@ export const markTones = [
   { id: 'oro', name: 'Oro satinato', color: '#c59b5f', roughness: .32, metalness: .9 },
 ]
 
-export const fonts = [
-  { id: 'classico', name: 'Classico', url: '/fonts/serif.json' },
-  { id: 'elegante', name: 'Elegante', url: '/fonts/elegante.json' },
-  { id: 'moderno', name: 'Moderno', url: '/fonts/moderno.json' },
-]
+/** Carattere del marchio d'esempio mostrato nella hero. */
+export const heroFont = '/fonts/serif.json'
 
 /**
- * Modelli 3D configurabili. `model` è un GLB qualsiasi (asse Y in alto): viene riscalato
- * all'altezza reale `height` (mm). Sostituendo il file si sostituisce il prodotto.
+ * Prodotto standard mostrato nel configuratore. Tutto è fissato da Velora: il cliente carica solo il logo.
+ * - `model`: GLB con asse Y in alto, riscalato all'altezza reale `height` (mm).
+ * - `mark.box`: area massima del logo (mm); il logo vi viene inscritto senza deformarlo.
+ * - `mark.heightPct`: altezza del centro del marchio (% dell'altezza); `angle`: 0 = fronte.
+ * - `mark.medallion`: medaglione ovale fisso (mm) oppure `null`.
+ * - `render.prompt`: istruzioni per l'immagine definitiva (usate dalla funzione /api/render).
  */
-export const products = [
-  {
-    id: 'vaso-alto', name: 'Vaso Onda', detail: 'Alto · 320 mm', model: '/models/vaso-onda-alto.glb', height: 320,
-    mark: { heightPct: 18, size: 62 },
-    description: 'Silhouette slanciata con otto onde sovrapposte. Elemento iconico per hall e suite.',
+export const product = {
+  id: 'vaso-onda', name: 'Vaso Onda', detail: 'Alto · 320 mm', model: '/models/vaso-onda-alto.glb', height: 320,
+  finish: 'avorio',
+  description: 'Silhouette slanciata con otto onde sovrapposte, stampata in 3D con finitura minerale opaca. Il marchio della struttura compare in rilievo su un medaglione ovale.',
+  mark: { heightPct: 18, angle: 0, box: { w: 56, h: 38 }, depth: 1.2, medallion: { w: 84, h: 56 }, tone: 'grafite' },
+  render: {
+    prompt: [
+      'Create a photorealistic product photograph of the exact vase shown in the first image.',
+      'Keep its shape, proportions and the overlapping sculptural swirls exactly as they are, with a matte ivory mineral finish like fine 3D-printed stone.',
+      'On the front of the vase there is a smooth oval medallion carrying the logo in raised relief (about 1 mm), in the same position and size as in the first image.',
+      'The logo must be reproduced faithfully from the second image: same letters, symbols, shapes and proportions, dark graphite colour. Do not invent, translate or add any text or element.',
+      'Setting: luxury hotel bathroom vanity in warm beige marble, soft warm daylight from the left, subtle reflections, shallow depth of field, elegant editorial interior photography.',
+      'Vertical 4:5 composition, the whole vase centred and fully visible, no people, no watermark.',
+    ].join(' '),
   },
-  {
-    id: 'vaso-basso', name: 'Vaso Onda', detail: 'Basso · 200 mm', model: '/models/vaso-onda-basso.glb', height: 200,
-    mark: { heightPct: 24, size: 58 },
-    description: 'Forma raccolta a dodici petali, pensata per tavoli, reception e centrotavola.',
-  },
-  {
-    id: 'portaspazzolini', name: 'Portaspazzolini', detail: 'Bagno · 115 mm', model: '/models/portaspazzolini.glb', height: 115,
-    mark: { heightPct: 30, size: 40 },
-    description: 'Contenitore aperto per il piano lavabo, con onda alta e base pulita per il marchio.',
-  },
-]
+}
 
-export const demoMark = { line1: 'GRAND HOTEL', line2: "PARKER'S", stars: 5, font: 'classico' }
+export const products = [product]
+
+export const demoMark = { line1: 'GRAND HOTEL', line2: "PARKER'S", stars: 5 }
 
 export const collection = [
   ['Vasi scultorei', 'Elementi iconici per hall e suite', 'vases'],

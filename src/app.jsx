@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { collection, demoMark, finishes, fonts, markTones, products, sectors } from './catalog'
+import { collection, demoMark, finishes, heroFont, markTones, product, sectors } from './catalog'
 import './style.css'
 
 const find = (list, id) => list.find(item => item.id === id) ?? list[0]
 const loadCore = () => import('./three/core.js')
-const mm = value => `${Math.round(value)} mm`
 
 function download(blob, name) {
   const url = URL.createObjectURL(blob)
@@ -51,7 +50,7 @@ function Hero() {
   useEffect(() => {
     let dispose, alive = true
     import('./three/hero.js').then(({ mountHero }) => alive && mountHero(stage.current, {
-      product: products[0], finish: finishes[0], mark: demoMark, font: fonts[0].url, onReady: () => alive && setReady(true),
+      product, finish: find(finishes, product.finish), mark: demoMark, font: heroFont, onReady: () => alive && setReady(true),
     })).then(cleanup => { if (alive) dispose = cleanup; else cleanup?.() }).catch(() => {})
     return () => { alive = false; dispose?.() }
   }, [])
@@ -61,9 +60,9 @@ function Hero() {
       <Logo />
       <span className="tricolore" aria-hidden="true"><i /><i /><i /></span>
       <h1 id="hero-title">Oggetti scultorei<br />con il <em>tuo marchio</em>,<br />stampati in 3D.</h1>
-      <p>Vasi, accessori bagno e segnaletica per hotel, resort e spazi esclusivi. Scegli la forma, carica il logo: lo estrudiamo in rilievo e lo vedi sull'oggetto, in tempo reale.</p>
+      <p>Vasi e accessori per hotel, resort e spazi esclusivi. Carica il logo della tua struttura: lo vedi subito in rilievo sul vaso in 3D e ricevi un'immagine fotorealistica del pezzo finito.</p>
       <div className="hero-actions">
-        <a className="button light" href="#configura">Personalizza in 3D <span aria-hidden="true">↓</span></a>
+        <a className="button light" href="#configura">Carica il tuo logo <span aria-hidden="true">↓</span></a>
         <a className="hero-link" href="#collezione">Scopri la collezione</a>
       </div>
       <ul className="hero-points">
@@ -72,24 +71,31 @@ function Hero() {
       </ul>
     </div>
     <div className={`hero-stage${ready ? ' ready' : ''}`} ref={stage}>
-      <span className="hero-caption">Vaso Onda · Bianco Avorio · marchio in rilievo 1,2 mm</span>
+      <span className="hero-caption">{product.name} · {find(finishes, product.finish).name} · marchio in rilievo</span>
     </div>
   </section>
 }
 
 /* ───────────────────────── Configuratore ───────────────────────── */
 
-const defaultConfig = product => ({
-  product: product.id, finish: finishes[0].id, tone: 'grafite',
-  mode: 'testo', ...demoMark,
-  heightPct: product.mark.heightPct, angle: 0, size: product.mark.size, depth: 1.2, medallion: true,
+const blobToDataURL = blob => new Promise((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onload = () => resolve(reader.result)
+  reader.onerror = () => reject(reader.error)
+  reader.readAsDataURL(blob)
 })
 
-function Range({ label, value, display, min, max, step = 1, onChange }) {
-  return <label className="range">
-    <span>{label}<output>{display ?? value}</output></span>
-    <input type="range" min={min} max={max} step={step} value={value} onChange={event => onChange(Number(event.target.value))} />
-  </label>
+/** Logo su fondo bianco, lato massimo 1024 px: riferimento pulito per il generatore d'immagine. */
+async function flattenLogo(source) {
+  const bitmap = await createImageBitmap(source)
+  const ratio = Math.min(1, 1024 / Math.max(bitmap.width, bitmap.height))
+  const canvas = Object.assign(document.createElement('canvas'), { width: Math.round(bitmap.width * ratio), height: Math.round(bitmap.height * ratio) })
+  const ctx = canvas.getContext('2d')
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+  bitmap.close?.()
+  return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Logo non leggibile.')), 'image/png'))
 }
 
 function Configurator({ onConfigured }) {
@@ -97,206 +103,175 @@ function Configurator({ onConfigured }) {
   const studio = useRef(null)
   const [ready, setReady] = useState(false)
   const [status, setStatus] = useState('Preparazione dello studio 3D…')
-  const [config, setConfig] = useState(() => defaultConfig(products[0]))
   const [logo, setLogo] = useState(null)
-  const [logoBusy, setLogoBusy] = useState(false)
-  const [logoError, setLogoError] = useState('')
-  const [measure, setMeasure] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
   const [rotating, setRotating] = useState(false)
-  const [exporting, setExporting] = useState('')
-  const product = find(products, config.product)
-  const finish = find(finishes, config.finish)
-  const tone = find(markTones, config.tone)
-  const patch = update => setConfig(current => ({ ...current, ...update }))
+  const [render, setRender] = useState({ state: 'idle' })
+  const [view, setView] = useState('3d')
+  const [elapsed, setElapsed] = useState(0)
+  const finish = find(finishes, product.finish)
+  const tone = find(markTones, product.mark.tone)
 
   useEffect(() => {
     let alive = true
-    import('./three/studio.js').then(({ Studio }) => {
+    import('./three/studio.js').then(async ({ Studio }) => {
       if (!alive) return
-      studio.current = new Studio(stage.current, {
-        onStatus: setStatus,
-        onPlacement: placement => setConfig(current => ({ ...current, ...placement })),
-        onMeasure: setMeasure,
-      })
-      setReady(true)
-    }).catch(() => setStatus('Il tuo browser non supporta la grafica 3D (WebGL).'))
+      const instance = new Studio(stage.current, { onStatus: setStatus, draggable: false })
+      studio.current = instance
+      const { heightPct, angle, box, depth, medallion } = product.mark
+      instance.setPlacement({ heightPct, angle, box, depth, medallion })
+      instance.setFinish(finish)
+      instance.setMarkTone(tone)
+      await instance.setProduct(product)
+      if (alive) setReady(true)
+    }).catch(() => alive && setStatus('Il tuo browser non supporta la grafica 3D (WebGL).'))
     return () => { alive = false; studio.current?.dispose(); studio.current = null }
   }, [])
 
-  useEffect(() => {
-    if (!ready) return
-    studio.current.setProduct(product).catch(() => {})
-  }, [ready, product])
-
-  useEffect(() => { if (ready) { studio.current.setFinish(finish); studio.current.setMarkTone(tone) } }, [ready, finish, tone])
+  useEffect(() => { if (ready) studio.current.setMark(logo?.polygons ?? null) }, [ready, logo])
   useEffect(() => { if (ready) studio.current.setAutoRotate(rotating) }, [ready, rotating])
-
+  useEffect(() => { onConfigured({ logo, render, studio }) }, [logo, render, onConfigured])
   useEffect(() => {
-    if (!ready) return
-    const { heightPct, angle, size, depth, medallion } = config
-    studio.current.setPlacement({ heightPct, angle, size, depth, medallion })
-  }, [ready, config.heightPct, config.angle, config.size, config.depth, config.medallion])
-
-  // geometria del marchio: testo composto oppure logo vettorializzato
-  useEffect(() => {
-    if (!ready) return
-    let alive = true
-    const timer = setTimeout(async () => {
-      if (config.mode === 'logo') { studio.current.setMark(logo?.polygons ?? null); return }
-      const { loadFont, textPolygons } = await loadCore()
-      const font = await loadFont(find(fonts, config.font).url)
-      if (!alive) return
-      const polygons = textPolygons(font, [{ text: config.line1, size: 14 }, { text: config.line2, size: 30 }], config.stars)
-      studio.current.setMark(polygons.length ? polygons : null)
-    }, 120)
-    return () => { alive = false; clearTimeout(timer) }
-  }, [ready, config.mode, config.line1, config.line2, config.stars, config.font, logo])
-
-  useEffect(() => { onConfigured({ config, product, finish, tone, logo, measure, studio }) }, [config, product, finish, tone, logo, measure, onConfigured])
-
-  function selectProduct(next) {
-    patch({ product: next.id, heightPct: next.mark.heightPct, size: next.mark.size, angle: 0 })
-  }
+    if (render.state !== 'loading') return
+    const timer = setInterval(() => setElapsed(Math.round((Date.now() - render.started) / 1000)), 500)
+    return () => clearInterval(timer)
+  }, [render])
 
   async function processLogo(file, invert = false) {
-    setLogoError('')
+    setError('')
     if (!file) return
-    if (file.size > 8 * 1024 * 1024) { setLogoError('Il file supera 8 MB.'); return }
+    if (file.size > 8 * 1024 * 1024) { setError('Il file supera 8 MB.'); return }
     const isSvg = file.type === 'image/svg+xml' || /\.svg$/i.test(file.name)
-    if (!isSvg && !/^image\/(png|jpeg|webp)$/.test(file.type)) { setLogoError('Formati accettati: SVG, PNG, JPG, WebP.'); return }
-    setLogoBusy(true)
+    if (!isSvg && !/^image\/(png|jpeg|webp)$/.test(file.type)) { setError('Formati accettati: SVG, PNG, JPG, WebP.'); return }
+    setBusy(true)
     try {
       const { svgPolygons, rasterPolygons } = await loadCore()
-      let polygons = null, kind = 'raster', inverted = false
+      const raster = isSvg ? await rasterizeSvg(file) : file
+      let polygons = null, kind = 'raster'
       if (isSvg && !invert) {
         polygons = await svgPolygons(await file.text()).catch(() => null)
         if (polygons?.length) kind = 'vector'
       }
-      if (!polygons?.length) {
-        const source = isSvg ? await rasterizeSvg(file) : file
-        ;({ polygons, inverted } = await rasterPolygons(source, { invert }))
-      }
-      // marchi compatti (stemmi, monogrammi): dimensione ridotta per restare nella zona liscia
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
-      for (const { outer } of polygons) for (const [x, y] of outer) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y) }
-      const aspect = (maxX - minX) / Math.max(1e-6, maxY - minY)
-      if (file !== logo?.file) patch({ size: Math.round(product.mark.size * (aspect < 1.4 ? .62 : 1)) })
+      if (!polygons?.length) ({ polygons } = await rasterPolygons(raster, { invert }))
+      const flat = await flattenLogo(raster)
       setLogo(current => {
         if (current?.url && current.file !== file) URL.revokeObjectURL(current.url)
-        return { file, url: current?.file === file ? current.url : URL.createObjectURL(file), polygons, kind, invert, inverted, shapes: polygons.length }
+        return { file, url: current?.file === file ? current.url : URL.createObjectURL(file), polygons, kind, invert, flat }
       })
-      patch({ mode: 'logo' })
-    } catch (error) {
-      setLogoError(error.message || 'Il logo non può essere elaborato.')
-    } finally { setLogoBusy(false) }
+      setRender({ state: 'idle' })
+      setView('3d')
+    } catch (problem) {
+      setError(problem.message || 'Il logo non può essere elaborato.')
+    } finally { setBusy(false) }
   }
 
-  async function exportFile(type) {
-    if (!studio.current) return
-    setExporting(type)
+  function removeLogo() {
+    if (logo?.url) URL.revokeObjectURL(logo.url)
+    setLogo(null)
+    setRender({ state: 'idle' })
+    setView('3d')
+  }
+
+  async function generate() {
+    if (!studio.current || !logo || render.state === 'loading') return
+    setRender({ state: 'loading', started: Date.now() })
+    setElapsed(0)
     try {
-      if (type === 'stl') download(await studio.current.exportSTL(), `velora-${product.id}.stl`)
-      else download(await studio.current.snapshot(), `velora-${product.id}.png`)
-    } finally { setExporting('') }
+      const [preview, logoData] = await Promise.all([
+        studio.current.shot(1024, 'image/jpeg').then(blobToDataURL),
+        blobToDataURL(logo.flat),
+      ])
+      const response = await fetch('/api/render', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product: product.id, preview, logo: logoData }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok || !data.image) throw new Error(data.error || (response.status === 404 ? 'Servizio di generazione non disponibile.' : 'La generazione non è riuscita.'))
+      setRender({ state: 'done', image: data.image })
+      setView('render')
+    } catch (problem) {
+      setRender({ state: 'error', error: problem.message || 'La generazione non è riuscita.' })
+    }
   }
 
-  const angleLabel = config.angle === 0 ? 'Fronte' : `${config.angle > 0 ? '+' : ''}${config.angle}°`
+  async function downloadRender() {
+    const blob = await (await fetch(render.image)).blob()
+    download(blob, `velora-${product.id}-definitiva.${blob.type.split('/')[1]?.replace('jpeg', 'jpg') || 'png'}`)
+  }
+
   return <section className="configurator" id="configura" aria-labelledby="config-title">
     <div className="section-head">
       <span className="eyebrow">Configuratore 3D</span>
       <h2 id="config-title">Il tuo marchio, <em>scolpito sull'oggetto.</em></h2>
-      <p>Scegli forma e finitura, scrivi il nome della struttura o carica il logo: viene estruso in rilievo e avvolto sulla superficie, come nel pezzo stampato.</p>
+      <p>Carica il logo della tua struttura: lo applichiamo in rilievo sul medaglione del {product.name}, nella posizione e nella misura previste. Poi genera l'immagine definitiva del pezzo finito.</p>
     </div>
     <div className="config-grid">
       <div className="config-stage">
         <div className="canvas-host" ref={stage} />
+        {render.state === 'done' && view === 'render' && <img className="render-view" src={render.image} alt={`Immagine definitiva del ${product.name} con il logo`} />}
         {status && <p className="stage-status" role="status">{status}</p>}
+        {ready && !logo && view === '3d' && <p className="stage-empty">Il medaglione attende il tuo logo</p>}
         <div className="stage-top">
           <span className="chip">{product.name} · {product.detail.split(' · ')[1]}</span>
-          <span className="chip ghost">{finish.name}</span>
+          {render.state === 'done' && <div className="view-switch" role="tablist" aria-label="Vista">
+            <button type="button" role="tab" aria-selected={view === '3d'} onClick={() => setView('3d')}>Anteprima 3D</button>
+            <button type="button" role="tab" aria-selected={view === 'render'} onClick={() => setView('render')}>Immagine definitiva</button>
+          </div>}
         </div>
-        <div className="stage-tools" role="toolbar" aria-label="Vista 3D">
+        {view === '3d' && <div className="stage-tools" role="toolbar" aria-label="Vista 3D">
           <button type="button" onClick={() => studio.current?.frameAll()}>Vista intera</button>
-          <button type="button" onClick={() => studio.current?.frameMark()}>Dettaglio marchio</button>
+          <button type="button" onClick={() => studio.current?.frameMark()} disabled={!logo}>Dettaglio logo</button>
           <button type="button" aria-pressed={rotating} onClick={() => setRotating(value => !value)}>360°</button>
-        </div>
-        <p className="stage-hint">Trascina il marchio per spostarlo · Ruota e ingrandisci con mouse o dita</p>
+        </div>}
+        {view === '3d' && <p className="stage-hint">Ruota e ingrandisci con mouse o dita</p>}
       </div>
 
       <div className="config-panel">
-        <fieldset className="step">
-          <legend><b>01</b> Oggetto</legend>
-          <div className="product-options">
-            {products.map(item => <button type="button" key={item.id} aria-pressed={item.id === product.id} onClick={() => selectProduct(item)}>
-              <strong>{item.name}</strong><small>{item.detail}</small>
-            </button>)}
-          </div>
+        <div className="product-card">
+          <strong>{product.name}</strong><small>{product.detail} · {finish.name}</small>
           <p className="help">{product.description}</p>
-        </fieldset>
+        </div>
 
         <fieldset className="step">
-          <legend><b>02</b> Finitura <small>{finish.name}</small></legend>
-          <div className="swatches">
-            {finishes.map(item => <button type="button" key={item.id} aria-label={item.name} title={item.name} aria-pressed={item.id === finish.id} style={{ '--swatch': item.color }} onClick={() => patch({ finish: item.id })} />)}
-          </div>
-        </fieldset>
-
-        <fieldset className="step">
-          <legend><b>03</b> Marchio</legend>
-          <div className="segmented" role="tablist">
-            <button type="button" role="tab" aria-selected={config.mode === 'testo'} onClick={() => patch({ mode: 'testo' })}>Testo</button>
-            <button type="button" role="tab" aria-selected={config.mode === 'logo'} onClick={() => patch({ mode: 'logo' })}>Carica logo</button>
-          </div>
-          {config.mode === 'testo' ? <div className="text-fields">
-            <label>Prima riga<input value={config.line1} maxLength={28} onChange={event => patch({ line1: event.target.value })} placeholder="GRAND HOTEL" /></label>
-            <label>Nome<input value={config.line2} maxLength={22} onChange={event => patch({ line2: event.target.value })} placeholder="Nome struttura" /></label>
-            <div className="inline-fields">
-              <label>Stelle<select value={config.stars} onChange={event => patch({ stars: Number(event.target.value) })}>
-                {[0, 1, 2, 3, 4, 5].map(value => <option key={value} value={value}>{value ? '★'.repeat(value) : 'Nessuna'}</option>)}
-              </select></label>
-              <label>Carattere<select value={config.font} onChange={event => patch({ font: event.target.value })}>
-                {fonts.map(font => <option key={font.id} value={font.id}>{font.name}</option>)}
-              </select></label>
-            </div>
-          </div> : <div className="logo-fields">
-            <label className={`dropzone${logoBusy ? ' busy' : ''}`}
-              onDragOver={event => event.preventDefault()}
-              onDrop={event => { event.preventDefault(); processLogo(event.dataTransfer.files[0]) }}>
-              <input type="file" accept=".svg,.png,.jpg,.jpeg,.webp,image/svg+xml,image/png,image/jpeg,image/webp" className="visually-hidden"
-                onChange={event => { processLogo(event.target.files[0]); event.target.value = '' }} />
-              {logo ? <img src={logo.url} alt="Logo caricato" /> : <span className="drop-icon" aria-hidden="true">↑</span>}
-              <span>{logoBusy ? 'Vettorializzazione in corso…' : logo ? logo.file.name : 'Trascina qui il logo o scegli un file'}<small>SVG consigliato · PNG, JPG, WebP fino a 8 MB</small></span>
-            </label>
-            {logoError && <p className="error" role="alert">{logoError}</p>}
-            {logo && <div className="logo-meta">
-              <span>{logo.kind === 'vector' ? 'Vettoriale originale' : 'Contorni ricavati dall\'immagine'} · {logo.shapes} forme</span>
-              <button type="button" className="text-button" onClick={() => processLogo(logo.file, !logo.invert)}>Inverti pieni e vuoti</button>
-              <button type="button" className="text-button" onClick={() => { URL.revokeObjectURL(logo.url); setLogo(null) }}>Rimuovi</button>
-            </div>}
+          <legend><b>01</b> Carica il tuo logo</legend>
+          <label className={`dropzone${busy ? ' busy' : ''}`}
+            onDragOver={event => event.preventDefault()}
+            onDrop={event => { event.preventDefault(); processLogo(event.dataTransfer.files[0]) }}>
+            <input type="file" accept=".svg,.png,.jpg,.jpeg,.webp,image/svg+xml,image/png,image/jpeg,image/webp" className="visually-hidden"
+              onChange={event => { processLogo(event.target.files[0]); event.target.value = '' }} />
+            {logo ? <img src={logo.url} alt="Logo caricato" /> : <span className="drop-icon" aria-hidden="true">↑</span>}
+            <span>{busy ? 'Elaborazione del logo…' : logo ? logo.file.name : 'Trascina qui il logo o scegli un file'}<small>{logo ? 'Clicca per sostituirlo' : 'SVG consigliato · PNG, JPG, WebP fino a 8 MB'}</small></span>
+          </label>
+          {error && <p className="error" role="alert">{error}</p>}
+          {logo && <div className="logo-meta">
+            <span>{logo.kind === 'vector' ? 'Vettoriale originale' : 'Contorni ricavati dall\'immagine'} · in rilievo {String(product.mark.depth).replace('.', ',')} mm</span>
+            {logo.kind !== 'vector' && <button type="button" className="text-button" onClick={() => processLogo(logo.file, !logo.invert)}>Inverti pieni e vuoti</button>}
+            <button type="button" className="text-button" onClick={removeLogo}>Rimuovi</button>
           </div>}
-          <div className="tones">
-            <span className="mini-label">Colore del rilievo</span>
-            {markTones.map(item => <button type="button" key={item.id} aria-pressed={item.id === tone.id} onClick={() => patch({ tone: item.id })}>
-              <i style={{ background: item.color ?? finish.color }} />{item.name}
-            </button>)}
-          </div>
         </fieldset>
 
         <fieldset className="step">
-          <legend><b>04</b> Posizione e rilievo</legend>
-          <Range label="Altezza sull'oggetto" value={config.heightPct} display={mm(product.height * config.heightPct / 100)} min={4} max={92} step={.5} onChange={heightPct => patch({ heightPct })} />
-          <Range label="Rotazione" value={config.angle} display={angleLabel} min={-180} max={180} onChange={angle => patch({ angle })} />
-          <Range label="Larghezza marchio" value={config.size} display={measure ? `${mm(measure.w)} × ${mm(measure.h)}` : mm(config.size)} min={16} max={Math.round(product.height * .55)} onChange={size => patch({ size })} />
-          <Range label="Spessore del rilievo" value={config.depth} display={`${config.depth.toFixed(1).replace('.', ',')} mm`} min={.4} max={3} step={.1} onChange={depth => patch({ depth })} />
-          <label className="toggle"><input type="checkbox" checked={config.medallion} onChange={event => patch({ medallion: event.target.checked })} /><span />Medaglione ovale sotto il marchio</label>
+          <legend><b>02</b> Immagine definitiva</legend>
+          <p className="help">Dall'anteprima 3D generiamo una fotografia realistica del vaso con il tuo logo, ambientata in una suite.</p>
+          <button type="button" className="button dark" disabled={!logo || render.state === 'loading'} onClick={generate}>
+            {render.state === 'loading' ? `Generazione in corso… ${elapsed}s` : render.state === 'done' ? 'Genera di nuovo' : 'Genera immagine definitiva'} <span aria-hidden="true">✦</span>
+          </button>
+          {!logo && <p className="help small">Disponibile dopo il caricamento del logo.</p>}
+          {render.state === 'loading' && <p className="help small" role="status">Di solito servono 20–40 secondi.</p>}
+          {render.state === 'error' && <p className="error" role="alert">{render.error}</p>}
+          {render.state === 'done' && <div className="render-result">
+            <button type="button" className="render-thumb" onClick={() => setView('render')}><img src={render.image} alt="" /></button>
+            <div>
+              <p className="help small">Immagine indicativa generata dall'AI: il pezzo prodotto segue il modello 3D.</p>
+              <button type="button" className="text-button" onClick={downloadRender}>Scarica immagine</button>
+            </div>
+          </div>}
         </fieldset>
 
         <div className="panel-actions">
-          <a className="button dark" href="#preventivo">Richiedi preventivo <span aria-hidden="true">→</span></a>
-          <div className="downloads">
-            <button type="button" className="text-button" disabled={!!exporting} onClick={() => exportFile('png')}>{exporting === 'png' ? 'Rendering…' : 'Salva immagine'}</button>
-            <button type="button" className="text-button" disabled={!!exporting} onClick={() => exportFile('stl')}>{exporting === 'stl' ? 'Esportazione…' : 'Scarica STL'}</button>
-          </div>
+          <a className="button outline" href="#preventivo">Richiedi preventivo <span aria-hidden="true">→</span></a>
         </div>
       </div>
     </div>
@@ -337,19 +312,18 @@ function Quote({ current }) {
     try {
       const body = new FormData(form)
       body.set('form-name', 'preventivo')
-      if (current) {
-        const { config, product, finish, tone, logo, measure, studio } = current
-        body.set('configurazione', [
-          `${product.name} (${product.detail})`,
-          `Finitura: ${finish.name}`,
-          `Marchio: ${config.mode === 'logo' ? `logo ${logo?.file.name ?? 'non caricato'}` : `${config.line1} / ${config.line2} / ${config.stars} stelle / carattere ${config.font}`}`,
-          `Colore rilievo: ${tone.name} · spessore ${config.depth} mm${config.medallion ? ' · con medaglione' : ''}`,
-          measure ? `Ingombro marchio: ${Math.round(measure.w)} × ${Math.round(measure.h)} mm` : '',
-          `Posizione: altezza ${Math.round(product.height * config.heightPct / 100)} mm, rotazione ${config.angle}°`,
-        ].filter(Boolean).join('\n'))
-        if (logo?.file) body.set('logo', logo.file)
-        const preview = await studio.current?.snapshot(1000, 1000).catch(() => null)
-        if (preview) body.set('anteprima', new File([preview], 'anteprima.png', { type: 'image/png' }))
+      const { logo, render, studio } = current ?? {}
+      body.set('configurazione', [
+        `${product.name} (${product.detail}) · ${find(finishes, product.finish).name}`,
+        `Logo: ${logo?.file.name ?? 'non caricato'}`,
+        `Immagine definitiva: ${render?.state === 'done' ? 'generata e allegata' : 'non generata'}`,
+      ].join('\n'))
+      if (logo?.file) body.set('logo', logo.file)
+      const preview = await studio?.current?.shot(1000, 'image/jpeg').catch(() => null)
+      if (preview) body.set('anteprima', new File([preview], 'anteprima-3d.jpg', { type: 'image/jpeg' }))
+      if (render?.state === 'done') {
+        const blob = await (await fetch(render.image)).blob().catch(() => null)
+        if (blob) body.set('definitiva', new File([blob], `immagine-definitiva.${blob.type.split('/')[1] || 'png'}`, { type: blob.type }))
       }
       const response = await fetch('/', { method: 'POST', body })
       if (!response.ok) throw new Error()
@@ -357,19 +331,17 @@ function Quote({ current }) {
       form.reset()
     } catch { setState('error') }
   }
-  const summary = current && <ul className="quote-summary">
-    <li><span>Oggetto</span>{current.product.name} · {current.product.detail}</li>
-    <li><span>Finitura</span>{current.finish.name}</li>
-    <li><span>Marchio</span>{current.config.mode === 'logo' ? (current.logo?.file.name ?? 'Logo da caricare') : [current.config.line1, current.config.line2].filter(Boolean).join(' · ')}</li>
-    <li><span>Rilievo</span>{current.tone.name} · {current.config.depth.toFixed(1).replace('.', ',')} mm{current.config.medallion ? ' · medaglione' : ''}</li>
-  </ul>
   return <section className="quote" id="preventivo" aria-labelledby="quote-title">
     <div className="quote-copy">
       <span className="eyebrow">Preventivo</span>
-      <h2 id="quote-title">Portiamo la tua collezione <em>in produzione.</em></h2>
-      <p>Allegheremo alla richiesta la configurazione, l'anteprima 3D e il logo. Ti rispondiamo con quotazione, tempi e un campione fisico su richiesta.</p>
-      {summary}
-      <a className="text-button" href="#configura">Modifica la configurazione ↑</a>
+      <h2 id="quote-title">Portiamo il tuo vaso <em>in produzione.</em></h2>
+      <p>Alla richiesta alleghiamo il logo, l'anteprima 3D e l'immagine definitiva. Ti rispondiamo con quotazione, tempi e un campione fisico su richiesta.</p>
+      <ul className="quote-summary">
+        <li><span>Oggetto</span>{product.name} · {product.detail}</li>
+        <li><span>Logo</span>{current?.logo?.file.name ?? 'Da caricare nel configuratore'}</li>
+        <li><span>Immagine</span>{current?.render?.state === 'done' ? 'Definitiva generata' : 'Non ancora generata'}</li>
+      </ul>
+      <a className="text-button" href="#configura">Torna al configuratore ↑</a>
     </div>
     {state === 'sent' ? <div className="quote-done" role="status">
       <h3>Richiesta inviata.</h3><p>Grazie: ti ricontatteremo a breve con la proposta.</p>
@@ -381,7 +353,7 @@ function Quote({ current }) {
       <label>Struttura<input name="struttura" required autoComplete="organization" placeholder="Hotel, resort, ristorante…" /></label>
       <label>Telefono<input name="telefono" type="tel" autoComplete="tel" /></label>
       <label>Quantità indicativa<input name="quantita" type="number" min="1" placeholder="Es. 120" /></label>
-      <label className="wide">Note<textarea name="note" rows="3" placeholder="Altri oggetti della collezione, colori, tempi…" /></label>
+      <label className="wide">Note<textarea name="note" rows="3" placeholder="Tempi, quantità per camera, altri oggetti della collezione…" /></label>
       {state === 'error' && <p className="error wide" role="alert">Invio non riuscito. Riprova tra poco.</p>}
       <button className="button dark wide" type="submit" disabled={state === 'sending'}>{state === 'sending' ? 'Invio in corso…' : 'Invia la richiesta'} <span aria-hidden="true">→</span></button>
     </form>}
