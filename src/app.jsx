@@ -87,10 +87,25 @@ function Hero() {
       if (!image || (!force && current === frame && image === images[frame])) return
       current = frame
       const { width, height } = canvas.current
-      // cover centrato: il vaso resta al centro anche su schermi verticali
-      const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight)
-      const w = image.naturalWidth * scale, h = image.naturalHeight * scale
-      ctx.drawImage(image, (width - w) / 2, (height - h) / 2, w, h)
+      const iw = image.naturalWidth, ih = image.naturalHeight
+      if (width / height >= 1) {
+        // orizzontale: cover centrato
+        const scale = Math.max(width / iw, height / ih)
+        ctx.drawImage(image, (width - iw * scale) / 2, (height - ih * scale) / 2, iw * scale, ih * scale)
+      } else {
+        // verticale: fotogramma nella parte alta, testo sotto su fondo scuro sfumato
+        const scale = Math.max(width / iw, height * .64 / ih)
+        const w = iw * scale, h = ih * scale, y = height * .06
+        ctx.fillStyle = '#1c1612'
+        ctx.fillRect(0, 0, width, height)
+        ctx.drawImage(image, (width - w) / 2, y, w, h)
+        const fadeTop = y + h * .62
+        const gradient = ctx.createLinearGradient(0, fadeTop, 0, y + h)
+        gradient.addColorStop(0, 'rgba(28, 22, 18, 0)')
+        gradient.addColorStop(1, 'rgba(28, 22, 18, 1)')
+        ctx.fillStyle = gradient
+        ctx.fillRect(0, fadeTop, width, y + h - fadeTop + 1)
+      }
     }
     const resize = () => {
       const ratio = Math.min(window.devicePixelRatio || 1, 2)
