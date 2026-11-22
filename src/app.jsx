@@ -60,7 +60,7 @@ function Hero() {
       <Logo />
       <span className="tricolore" aria-hidden="true"><i /><i /><i /></span>
       <h1 id="hero-title">Oggetti scultorei<br />con il <em>tuo marchio</em>,<br />stampati in 3D.</h1>
-      <p>Vasi e accessori per hotel, resort e spazi esclusivi. Carica il logo della tua struttura: lo vedi subito in rilievo sul vaso in 3D e ricevi un'immagine fotorealistica del pezzo finito.</p>
+      <p>Vasi e accessori per hotel, resort e spazi esclusivi. Carica il logo della tua struttura e scegli il colore: lo vedi subito sul vaso in 3D e ricevi un'immagine fotorealistica del pezzo finito, con il logo inciso.</p>
       <div className="hero-actions">
         <a className="button light" href="#configura">Carica il tuo logo <span aria-hidden="true">↓</span></a>
         <a className="hero-link" href="#collezione">Scopri la collezione</a>
@@ -71,7 +71,7 @@ function Hero() {
       </ul>
     </div>
     <div className={`hero-stage${ready ? ' ready' : ''}`} ref={stage}>
-      <span className="hero-caption">{product.name} · {find(finishes, product.finish).name} · marchio in rilievo</span>
+      <span className="hero-caption">{product.name} · {find(finishes, product.finish).name} · logo inciso</span>
     </div>
   </section>
 }
@@ -110,7 +110,8 @@ function Configurator({ onConfigured }) {
   const [render, setRender] = useState({ state: 'idle' })
   const [view, setView] = useState('3d')
   const [elapsed, setElapsed] = useState(0)
-  const finish = find(finishes, product.finish)
+  const [finishId, setFinishId] = useState(product.finish)
+  const finish = find(finishes, finishId)
   const tone = find(markTones, product.mark.tone)
 
   useEffect(() => {
@@ -130,8 +131,9 @@ function Configurator({ onConfigured }) {
   }, [])
 
   useEffect(() => { if (ready) studio.current.setMark(logo?.polygons ?? null) }, [ready, logo])
+  useEffect(() => { studio.current?.setFinish(finish) }, [finish])
   useEffect(() => { if (ready) studio.current.setAutoRotate(rotating) }, [ready, rotating])
-  useEffect(() => { onConfigured({ logo, render, studio }) }, [logo, render, onConfigured])
+  useEffect(() => { onConfigured({ logo, render, studio, finish }) }, [logo, render, finish, onConfigured])
   useEffect(() => {
     if (render.state !== 'loading') return
     const timer = setInterval(() => setElapsed(Math.round((Date.now() - render.started) / 1000)), 500)
@@ -178,18 +180,14 @@ function Configurator({ onConfigured }) {
     setRender({ state: 'loading', started: Date.now() })
     setElapsed(0)
     try {
-      const [preview, logoData] = await Promise.all([
-        studio.current.shot(1024, 'image/jpeg').then(blobToDataURL),
-        blobToDataURL(logo.flat),
-      ])
       const response = await fetch('/api/render', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ product: product.id, preview, logo: logoData }),
+        body: JSON.stringify({ product: product.id, finish: finish.id, logo: await blobToDataURL(logo.flat) }),
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok || !data.image) throw new Error(data.error || (response.status === 404 ? 'Servizio di generazione non disponibile.' : 'La generazione non è riuscita.'))
-      setRender({ state: 'done', image: data.image })
+      setRender({ state: 'done', image: data.image, finish: finish.id })
       setView('render')
     } catch (problem) {
       setRender({ state: 'error', error: problem.message || 'La generazione non è riuscita.' })
@@ -205,7 +203,7 @@ function Configurator({ onConfigured }) {
     <div className="section-head">
       <span className="eyebrow">Configuratore 3D</span>
       <h2 id="config-title">Il tuo marchio, <em>scolpito sull'oggetto.</em></h2>
-      <p>Carica il logo della tua struttura: lo applichiamo in rilievo sul medaglione del {product.name}, nella posizione e nella misura previste. Poi genera l'immagine definitiva del pezzo finito.</p>
+      <p>Carica il logo della tua struttura e scegli il colore: il logo viene inciso sul medaglione del {product.name}, nella posizione e nella misura previste. L'anteprima 3D è indicativa; l'immagine definitiva mostra il pezzo finito.</p>
     </div>
     <div className="config-grid">
       <div className="config-stage">
@@ -230,7 +228,7 @@ function Configurator({ onConfigured }) {
 
       <div className="config-panel">
         <div className="product-card">
-          <strong>{product.name}</strong><small>{product.detail} · {finish.name}</small>
+          <strong>{product.name}</strong><small>{product.detail}</small>
           <p className="help">{product.description}</p>
         </div>
 
@@ -246,17 +244,25 @@ function Configurator({ onConfigured }) {
           </label>
           {error && <p className="error" role="alert">{error}</p>}
           {logo && <div className="logo-meta">
-            <span>{logo.kind === 'vector' ? 'Vettoriale originale' : 'Contorni ricavati dall\'immagine'} · in rilievo {String(product.mark.depth).replace('.', ',')} mm</span>
+            <span>{logo.kind === 'vector' ? 'Vettoriale originale' : 'Contorni ricavati dall\'immagine'} · inciso {String(product.mark.depth).replace('.', ',')} mm</span>
             {logo.kind !== 'vector' && <button type="button" className="text-button" onClick={() => processLogo(logo.file, !logo.invert)}>Inverti pieni e vuoti</button>}
             <button type="button" className="text-button" onClick={removeLogo}>Rimuovi</button>
           </div>}
         </fieldset>
 
         <fieldset className="step">
-          <legend><b>02</b> Immagine definitiva</legend>
-          <p className="help">Dall'anteprima 3D generiamo una fotografia realistica del vaso con il tuo logo, ambientata in una suite.</p>
+          <legend><b>02</b> Colore <small>{finish.name}</small></legend>
+          <div className="swatches">
+            {finishes.map(item => <button type="button" key={item.id} aria-label={item.name} title={item.name} aria-pressed={item.id === finish.id} style={{ '--swatch': item.color }} onClick={() => { setFinishId(item.id); setView('3d') }} />)}
+          </div>
+          <p className="help small">Il logo è inciso nel medaglione, nello stesso colore del vaso.</p>
+        </fieldset>
+
+        <fieldset className="step">
+          <legend><b>03</b> Immagine definitiva</legend>
+          <p className="help">Generiamo una fotografia realistica del vaso nel colore scelto, con il tuo logo inciso, ambientata in una suite.</p>
           <button type="button" className="button dark" disabled={!logo || render.state === 'loading'} onClick={generate}>
-            {render.state === 'loading' ? `Generazione in corso… ${elapsed}s` : render.state === 'done' ? 'Genera di nuovo' : 'Genera immagine definitiva'} <span aria-hidden="true">✦</span>
+            {render.state === 'loading' ? `Generazione in corso… ${elapsed}s` : render.state === 'done' && render.finish === finish.id ? 'Genera di nuovo' : 'Genera immagine definitiva'} <span aria-hidden="true">✦</span>
           </button>
           {!logo && <p className="help small">Disponibile dopo il caricamento del logo.</p>}
           {render.state === 'loading' && <p className="help small" role="status">Di solito servono 20–40 secondi.</p>}
@@ -264,7 +270,7 @@ function Configurator({ onConfigured }) {
           {render.state === 'done' && <div className="render-result">
             <button type="button" className="render-thumb" onClick={() => setView('render')}><img src={render.image} alt="" /></button>
             <div>
-              <p className="help small">Immagine indicativa generata dall'AI: il pezzo prodotto segue il modello 3D.</p>
+              <p className="help small">{render.finish === finish.id ? 'Immagine indicativa generata dall\'AI.' : `Generata in ${find(finishes, render.finish).name}: rigenera per il nuovo colore.`}</p>
               <button type="button" className="text-button" onClick={downloadRender}>Scarica immagine</button>
             </div>
           </div>}
@@ -314,7 +320,7 @@ function Quote({ current }) {
       body.set('form-name', 'preventivo')
       const { logo, render, studio } = current ?? {}
       body.set('configurazione', [
-        `${product.name} (${product.detail}) · ${find(finishes, product.finish).name}`,
+        `${product.name} (${product.detail}) · ${(current?.finish ?? find(finishes, product.finish)).name}`,
         `Logo: ${logo?.file.name ?? 'non caricato'}`,
         `Immagine definitiva: ${render?.state === 'done' ? 'generata e allegata' : 'non generata'}`,
       ].join('\n'))
@@ -338,6 +344,7 @@ function Quote({ current }) {
       <p>Alla richiesta alleghiamo il logo, l'anteprima 3D e l'immagine definitiva. Ti rispondiamo con quotazione, tempi e un campione fisico su richiesta.</p>
       <ul className="quote-summary">
         <li><span>Oggetto</span>{product.name} · {product.detail}</li>
+        <li><span>Colore</span>{(current?.finish ?? find(finishes, product.finish)).name}</li>
         <li><span>Logo</span>{current?.logo?.file.name ?? 'Da caricare nel configuratore'}</li>
         <li><span>Immagine</span>{current?.render?.state === 'done' ? 'Definitiva generata' : 'Non ancora generata'}</li>
       </ul>

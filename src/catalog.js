@@ -1,8 +1,8 @@
 export const finishes = [
-  { id: 'avorio', name: 'Bianco Avorio', color: '#e9dfd0', roughness: .72 },
-  { id: 'sabbia', name: 'Sabbia', color: '#c4a98a', roughness: .74 },
-  { id: 'azzurro', name: 'Azzurro Neutro', color: '#8597a3', roughness: .68 },
-  { id: 'grafite', name: 'Grafite', color: '#3b3a38', roughness: .6 },
+  { id: 'avorio', name: 'Bianco Avorio', color: '#e9dfd0', roughness: .72, prompt: 'warm ivory white' },
+  { id: 'sabbia', name: 'Sabbia', color: '#c4a98a', roughness: .74, prompt: 'warm sand beige' },
+  { id: 'azzurro', name: 'Azzurro Neutro', color: '#8597a3', roughness: .68, prompt: 'muted powder blue-grey' },
+  { id: 'grafite', name: 'Grafite', color: '#3b3a38', roughness: .6, prompt: 'deep graphite charcoal grey' },
 ]
 
 export const markTones = [
@@ -25,16 +25,19 @@ export const heroFont = '/fonts/serif.json'
 export const product = {
   id: 'vaso-onda', name: 'Vaso Onda', detail: 'Alto · 320 mm', model: '/models/vaso-onda-alto.glb', height: 320,
   finish: 'avorio',
-  description: 'Silhouette slanciata con otto onde sovrapposte, stampata in 3D con finitura minerale opaca. Il marchio della struttura compare in rilievo su un medaglione ovale.',
-  mark: { heightPct: 18, angle: 0, box: { w: 56, h: 38 }, depth: 1.2, medallion: { w: 84, h: 56 }, tone: 'grafite' },
+  description: 'Silhouette slanciata con otto onde sovrapposte, stampata in 3D con finitura minerale opaca. Il logo della struttura è inciso su un medaglione ovale, nello stesso colore del vaso.',
+  mark: { heightPct: 18, angle: 0, box: { w: 56, h: 38 }, depth: 1.2, medallion: { w: 84, h: 56 }, tone: 'tono' },
   render: {
+    // foto del pezzo reale: è la forma che l'immagine definitiva deve rispettare
+    reference: '/images/vaso-riferimento.jpg',
+    /** Prompt per l'Image API; `{color}` viene sostituito con la finitura scelta. */
     prompt: [
-      'Create a photorealistic product photograph of the exact vase shown in the first image.',
-      'Keep its shape, proportions and the overlapping sculptural swirls exactly as they are, with a matte ivory mineral finish like fine 3D-printed stone.',
-      'On the front of the vase there is a smooth oval medallion carrying the logo in raised relief (about 1 mm), in the same position and size as in the first image.',
-      'The logo must be reproduced faithfully from the second image: same letters, symbols, shapes and proportions, dark graphite colour. Do not invent, translate or add any text or element.',
+      'The first image is the exact product reference. Reproduce this same vase: identical silhouette, proportions, neck and lip, the same broad overlapping sculptural swirls and the smooth oval medallion near the base. Do not redesign or simplify the vase.',
+      'Material: matte mineral 3D-printed stone with a very fine texture. Colour of the whole vase: {color}. The vase, the medallion and the logo are all this single colour.',
+      'Inside the oval medallion, remove any existing text completely and place the logo from the second image, centred, about 70% of the medallion width, reproduced faithfully: same letters, symbols and proportions; do not add, translate or invent anything.',
+      'The logo is ENGRAVED (debossed) about 1 mm into the surface, carved into the same material, the same colour as the vase, readable only through the soft shadows and highlights of the carved edges. No ink, no paint, no print, no contrasting colour.',
       'Setting: luxury hotel bathroom vanity in warm beige marble, soft warm daylight from the left, subtle reflections, shallow depth of field, elegant editorial interior photography.',
-      'Vertical 4:5 composition, the whole vase centred and fully visible, no people, no watermark.',
+      'Vertical composition, the whole vase centred and fully visible, no people, no watermark.',
     ].join(' '),
   },
 }

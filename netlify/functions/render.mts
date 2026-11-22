@@ -1,9 +1,9 @@
 import type { Config, Context } from '@netlify/functions'
-import { product } from '../../src/catalog.js'
+import { finishes, product } from '../../src/catalog.js'
 
 /**
- * Immagine "definitiva": riceve la vista 3D del prodotto con il logo e il logo originale,
- * chiede a un modello di generazione immagini via OpenRouter una foto fotorealistica.
+ * Immagine "definitiva": riceve il logo e la finitura scelta; al modello passa la foto del vaso reale
+ * (servita dal sito stesso) e il logo, con l'istruzione di incidere il logo nel medaglione.
  * Usa l'Image API dedicata (POST /api/v1/images): le due immagini vanno in `input_references`.
  *
  * Variabili d'ambiente (Netlify → Project configuration → Environment variables, scope Functions):
@@ -38,7 +38,13 @@ export default async (req: Request, context: Context) => {
   let body: any
   try { body = await req.json() } catch { return json({ error: 'Richiesta non valida.' }, 400) }
   if (body?.product !== product.id) return json({ error: 'Prodotto sconosciuto.' }, 400)
-  if (!isImage(body.preview) || !isImage(body.logo)) return json({ error: 'Immagini mancanti o troppo grandi.' }, 400)
+  if (!isImage(body.logo)) return json({ error: 'Logo mancante o troppo grande.' }, 400)
+  const finish = finishes.find(item => item.id === body.finish)
+  if (!finish) return json({ error: 'Finitura sconosciuta.' }, 400)
+  // https obbligatorio: OpenRouter scarica la foto di riferimento da qui
+  const origin = (context.site?.url || new URL(req.url).origin).replace(/^http:\/\/(?!localhost|127\.)/, 'https://')
+  const reference = new URL(product.render.reference, origin).href
+  const prompt = product.render.prompt.replaceAll('{color}', `${finish.prompt} (${finish.color})`)
 
   let response: Response
   try {
@@ -48,14 +54,14 @@ export default async (req: Request, context: Context) => {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': context.site?.url ?? 'https://velora-hospitality.netlify.app',
+        'HTTP-Referer': origin,
         'X-Title': 'Velora configuratore',
       },
       body: JSON.stringify({
         model: Netlify.env.get('OPENROUTER_IMAGE_MODEL') || DEFAULT_MODEL,
-        prompt: product.render.prompt,
+        prompt,
         input_references: [
-          { type: 'image_url', image_url: { url: body.preview } },
+          { type: 'image_url', image_url: { url: reference } },
           { type: 'image_url', image_url: { url: body.logo } },
         ],
       }),

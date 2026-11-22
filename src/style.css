@@ -248,3 +248,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--g
 .render-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .render-result div { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .panel-actions .button.outline { color: var(--ink); }
+.swatches { display: flex; gap: 12px; }
+.swatches button { width: 44px; height: 44px; border-radius: 50%; border: 0; background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--swatch) 70%, #fff), var(--swatch) 62%, color-mix(in srgb, var(--swatch) 80%, #000)); box-shadow: 0 0 0 1px rgba(0, 0, 0, .08); transition: box-shadow .2s, transform .2s; }
+.swatches button:hover { transform: scale(1.06); }
+.swatches button[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px var(--espresso); }
