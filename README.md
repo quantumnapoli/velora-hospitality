@@ -24,12 +24,12 @@ Un solo prodotto standard (`product` in `src/catalog.js`): il cliente carica sol
 Posizione, area massima del logo (`mark.box`), medaglione, spessore e colori sono fissati nel catalogo.
 1. Il logo (SVG, PNG, JPG, WebP) viene vettorializzato, estruso e avvolto sul medaglione: anteprima 3D.
 2. "Genera immagine definitiva" invia a `/api/render` (funzione Netlify `netlify/functions/render.mts`)
-   una vista frontale fissa del 3D e il logo; la funzione chiama OpenRouter e restituisce la foto.
+   una vista frontale fissa del 3D e il logo; la funzione chiama l'Image API di OpenRouter (`POST /api/v1/images`) e restituisce la foto.
 
 Variabili d'ambiente su Netlify (scope **Functions**, poi rifare il deploy):
 - `OPENROUTER_API_KEY` — obbligatoria.
-- `OPENROUTER_IMAGE_MODEL` — facoltativa, default `openai/gpt-5-image`. Deve essere un modello
-  OpenRouter che accetta immagini in ingresso e restituisce immagini (es. i modelli Gemini image).
+- `OPENROUTER_IMAGE_MODEL` — facoltativa, default `openai/gpt-image-2.6-flare`. Deve essere un modello
+  dell'Image API di OpenRouter che accetta `input_references` (immagini di riferimento).
 Il prompt è in `product.render.prompt`. Limite: 6 generazioni al minuto per IP.
 
 ## Sostituire un modello con quello definitivo

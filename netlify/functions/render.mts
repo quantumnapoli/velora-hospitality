@@ -4,27 +4,28 @@ import { product } from '../../src/catalog.js'
 /**
  * Immagine "definitiva": riceve la vista 3D del prodotto con il logo e il logo originale,
  * chiede a un modello di generazione immagini via OpenRouter una foto fotorealistica.
+ * Usa l'Image API dedicata (POST /api/v1/images): le due immagini vanno in `input_references`.
  *
  * Variabili d'ambiente (Netlify → Project configuration → Environment variables, scope Functions):
  *   OPENROUTER_API_KEY      obbligatoria
  *   OPENROUTER_IMAGE_MODEL  facoltativa, id del modello OpenRouter (default sotto)
  */
-const DEFAULT_MODEL = 'openai/gpt-5-image'
+const DEFAULT_MODEL = 'openai/gpt-image-2.6-flare'
 const MAX_IMAGE = 2_500_000 // caratteri di data URL per immagine (~1,8 MB)
 
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'no-store' } })
 const isImage = (value: unknown): value is string =>
   typeof value === 'string' && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value) && value.length <= MAX_IMAGE
 
-/** Le risposte con immagini arrivano in `message.images` oppure come parti del contenuto. */
-function findImage(message: any): string | null {
-  const candidates = [
-    ...(Array.isArray(message?.images) ? message.images : []),
-    ...(Array.isArray(message?.content) ? message.content : []),
-  ]
-  for (const part of candidates) {
-    const url = part?.image_url?.url ?? part?.url ?? (part?.b64_json && `data:image/png;base64,${part.b64_json}`)
-    if (typeof url === 'string' && (url.startsWith('data:image/') || url.startsWith('https://'))) return url
+/** Image API: `data[].b64_json` (base64 senza prefisso) oppure `data[].url`. */
+function findImage(data: any): string | null {
+  for (const item of Array.isArray(data?.data) ? data.data : []) {
+    if (typeof item?.b64_json === 'string' && item.b64_json) {
+      const b64 = item.b64_json.replace(/^data:image\/\w+;base64,/, '')
+      const type = b64.startsWith('/9j/') ? 'jpeg' : b64.startsWith('UklGR') ? 'webp' : 'png'
+      return `data:image/${type};base64,${b64}`
+    }
+    if (typeof item?.url === 'string' && /^(https:|data:image\/)/.test(item.url)) return item.url
   }
   return null
 }
@@ -41,9 +42,9 @@ export default async (req: Request, context: Context) => {
 
   let response: Response
   try {
-    response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    response = await fetch('https://openrouter.ai/api/v1/images', {
       method: 'POST',
-      signal: AbortSignal.timeout(55_000),
+      signal: AbortSignal.timeout(58_000),
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
@@ -52,16 +53,11 @@ export default async (req: Request, context: Context) => {
       },
       body: JSON.stringify({
         model: Netlify.env.get('OPENROUTER_IMAGE_MODEL') || DEFAULT_MODEL,
-        modalities: ['image', 'text'],
-        image_config: { aspect_ratio: '4:5' },
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text', text: product.render.prompt },
-            { type: 'image_url', image_url: { url: body.preview } },
-            { type: 'image_url', image_url: { url: body.logo } },
-          ],
-        }],
+        prompt: product.render.prompt,
+        input_references: [
+          { type: 'image_url', image_url: { url: body.preview } },
+          { type: 'image_url', image_url: { url: body.logo } },
+        ],
       }),
     })
   } catch (error) {
@@ -75,12 +71,12 @@ export default async (req: Request, context: Context) => {
     const status = response.status === 402 ? 402 : response.status === 429 ? 429 : 502
     return json({ error: status === 402 ? 'Credito OpenRouter esaurito.' : status === 429 ? 'Troppe richieste, riprova tra poco.' : 'La generazione non è riuscita.' }, status)
   }
-  const image = findImage(data?.choices?.[0]?.message)
+  const image = findImage(data)
   if (!image) {
     console.error('OpenRouter senza immagine', JSON.stringify(data).slice(0, 500))
     return json({ error: 'Il modello non ha restituito un\'immagine.' }, 502)
   }
-  return json({ image, model: data?.model ?? null })
+  return json({ image, model: data?.model ?? Netlify.env.get('OPENROUTER_IMAGE_MODEL') ?? DEFAULT_MODEL })
 }
 
 export const config: Config = {
