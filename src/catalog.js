@@ -26,12 +26,12 @@ export const product = {
   mark: { heightPct: 18, angle: 0, box: { w: 56, h: 38 }, depth: 1.2, medallion: { w: 84, h: 56 }, tone: 'tono' },
   render: {
     // foto del pezzo reale: è la forma che l'immagine definitiva deve rispettare
-    reference: '/images/vaso-riferimento.jpg',
+    reference: '/images/vaso-riferimento-vuoto.jpg',
     /** Prompt per l'Image API; `{color}` viene sostituito con la finitura scelta. */
     prompt: [
-      'The first image is the exact product reference. Reproduce this same vase: identical silhouette, proportions, neck and lip, the same broad overlapping sculptural swirls and the smooth oval medallion near the base. Do not redesign or simplify the vase.',
+      'The first image is the exact product reference. Reproduce this same vase: identical silhouette, proportions, neck and lip, the same broad overlapping sculptural swirls and the subtle, empty, slightly recessed oval medallion near the base. Do not redesign or simplify the vase.',
       'Material: matte mineral 3D-printed stone with a very fine texture. Colour of the whole vase: {color}. The vase, the medallion and the logo are all this single colour.',
-      'Inside the oval medallion, remove any existing text completely and place the logo from the second image, centred, about 70% of the medallion width, reproduced faithfully: same letters, symbols and proportions; do not add, translate or invent anything.',
+      'The second image is the customer logo as a dark silhouette on white (only its shape matters, not its colour). Place exactly this logo inside the oval medallion, centred, about 70% of the medallion width, reproduced faithfully: same letters, symbols and proportions. Do not add, translate or invent any text; no other text anywhere on the vase.',
       'The logo is ENGRAVED (debossed) about 1 mm into the surface, carved into the same material, the same colour as the vase, readable only through the soft shadows and highlights of the carved edges. No ink, no paint, no print, no contrasting colour.',
       'Setting: luxury hotel bathroom vanity in warm beige marble, soft warm daylight from the left, subtle reflections, shallow depth of field, elegant editorial interior photography.',
       'Vertical composition, the whole vase centred and fully visible, no people, no watermark.',

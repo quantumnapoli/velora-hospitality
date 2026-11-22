@@ -200,16 +200,30 @@ const blobToDataURL = blob => new Promise((resolve, reject) => {
   reader.readAsDataURL(blob)
 })
 
-/** Logo su fondo bianco, lato massimo 1024 px: riferimento pulito per il generatore d'immagine. */
-async function flattenLogo(source) {
-  const bitmap = await createImageBitmap(source)
-  const ratio = Math.min(1, 1024 / Math.max(bitmap.width, bitmap.height))
-  const canvas = Object.assign(document.createElement('canvas'), { width: Math.round(bitmap.width * ratio), height: Math.round(bitmap.height * ratio) })
+/**
+ * Sagoma del logo nera su bianco, ricavata dagli stessi poligoni del 3D: funziona anche con loghi
+ * bianchi o chiari su fondo trasparente (che su fondo bianco sarebbero invisibili al generatore).
+ */
+function silhouette(polygons, side = 1024) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const { outer } of polygons) for (const [x, y] of outer) {
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y)
+  }
+  const w = maxX - minX || 1, h = maxY - minY || 1
+  const scale = side * .84 / Math.max(w, h)
+  const width = Math.round(w * scale + side * .16), height = Math.round(h * scale + side * .16)
+  const canvas = Object.assign(document.createElement('canvas'), { width, height })
   const ctx = canvas.getContext('2d')
   ctx.fillStyle = '#fff'
-  ctx.fillRect(0, 0, canvas.width, canvas.height)
-  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
-  bitmap.close?.()
+  ctx.fillRect(0, 0, width, height)
+  const px = ([x, y]) => [(x - minX) * scale + side * .08, (maxY - y) * scale + side * .08]
+  ctx.beginPath()
+  for (const { outer, holes } of polygons) for (const ring of [outer, ...holes]) {
+    ring.forEach((point, i) => { const [x, y] = px(point); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y) })
+    ctx.closePath()
+  }
+  ctx.fillStyle = '#111'
+  ctx.fill('evenodd')
   return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Logo non leggibile.')), 'image/png'))
 }
 
@@ -271,10 +285,11 @@ function Configurator({ onConfigured }) {
         if (polygons?.length) kind = 'vector'
       }
       if (!polygons?.length) ({ polygons } = await rasterPolygons(raster, { invert }))
-      const flat = await flattenLogo(raster)
+      const flat = await silhouette(polygons)
       setLogo(current => {
         if (current?.url && current.file !== file) URL.revokeObjectURL(current.url)
-        return { file, url: current?.file === file ? current.url : URL.createObjectURL(file), polygons, kind, invert, flat }
+        if (current?.preview) URL.revokeObjectURL(current.preview)
+        return { file, url: current?.file === file ? current.url : URL.createObjectURL(file), preview: URL.createObjectURL(flat), polygons, kind, invert, flat }
       })
       setRender({ state: 'idle' })
       setView('3d')
@@ -285,6 +300,7 @@ function Configurator({ onConfigured }) {
 
   function removeLogo() {
     if (logo?.url) URL.revokeObjectURL(logo.url)
+    if (logo?.preview) URL.revokeObjectURL(logo.preview)
     setLogo(null)
     setRender({ state: 'idle' })
     setView('3d')
@@ -354,7 +370,7 @@ function Configurator({ onConfigured }) {
             onDrop={event => { event.preventDefault(); processLogo(event.dataTransfer.files[0]) }}>
             <input type="file" accept=".svg,.png,.jpg,.jpeg,.webp,image/svg+xml,image/png,image/jpeg,image/webp" className="visually-hidden"
               onChange={event => { processLogo(event.target.files[0]); event.target.value = '' }} />
-            {logo ? <img src={logo.url} alt="Logo caricato" /> : <span className="drop-icon" aria-hidden="true">↑</span>}
+            {logo ? <img src={logo.preview} alt="Sagoma del logo che verrà incisa" /> : <span className="drop-icon" aria-hidden="true">↑</span>}
             <span>{busy ? 'Elaborazione del logo…' : logo ? logo.file.name : 'Trascina qui il logo o scegli un file'}<small>{logo ? 'Clicca per sostituirlo' : 'SVG consigliato · PNG, JPG, WebP fino a 8 MB'}</small></span>
           </label>
           {error && <p className="error" role="alert">{error}</p>}
