@@ -1,8 +1,19 @@
 {
-  "name": "forma-ospite",
+  "name": "velora-3d-design-objects",
   "private": true,
   "type": "module",
-  "scripts": { "build": "node build.mjs", "dev": "node build.mjs --serve" },
-  "dependencies": { "react": "19.2.4", "react-dom": "19.2.4", "three": "0.160.0" },
-  "devDependencies": { "esbuild": "0.28.2" }
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --serve",
+    "models": "node scripts/build-models.mjs"
+  },
+  "dependencies": {
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "three": "0.160.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "gltfpack": "^0.25.0"
+  }
 }

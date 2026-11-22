@@ -1,35 +1,61 @@
 export const finishes = [
-  { id: 'ivory', name: 'Bianco Avorio', color: '#e5d9c9', roughness: .66, metalness: 0 },
-  { id: 'sand', name: 'Sabbia', color: '#b89e81', roughness: .71, metalness: 0 },
-  { id: 'blue', name: 'Azzurro Neutro', color: '#80939f', roughness: .63, metalness: 0 },
-  { id: 'graphite', name: 'Grafite', color: '#393938', roughness: .61, metalness: 0 },
+  { id: 'avorio', name: 'Bianco Avorio', color: '#e9dfd0', roughness: .72 },
+  { id: 'sabbia', name: 'Sabbia', color: '#c4a98a', roughness: .74 },
+  { id: 'azzurro', name: 'Azzurro Neutro', color: '#8597a3', roughness: .68 },
+  { id: 'grafite', name: 'Grafite', color: '#3b3a38', roughness: .6 },
 ]
 
-const references = [
-  ['Vaso scultoreo alto', 'Tall sculptural vase', 'vases', 'A sweeping silhouette for lobbies and suites.'],
-  ['Posacenere', 'Sculptural ashtray', 'ashtray', 'A low, flowing profile with an integrated rest.'],
-  ['Portaspazzolini', 'Toothbrush holder', 'oral-care', 'An open vessel for the bathroom vanity.'],
-  ['Portafazzoletti', 'Tissue box cover', 'tissue', 'A sculpted cover with a discreet slot.'],
-  ['Set cortesia', 'Amenity tray', 'amenities', 'A compact tray for bath and welcome essentials.'],
-  ['Targa camera', 'Room sign', 'room-sign', 'A softly profiled sign for guest room numbers.'],
-  ['Centrotavola', 'Centre­piece', 'centerpiece', 'An openwork bowl for tables and reception spaces.'],
-  ['Vaso scultoreo piccolo', 'Small sculptural vase', 'vases', 'The compact form shown in the vase family.'],
-  ['Vaso scultoreo medio', 'Medium sculptural vase', 'vases', 'The intermediate form shown in the vase family.'],
-  ['Custodia spazzolino', 'Toothbrush case', 'oral-care', 'The closed companion shown in the oral-care set.'],
+export const markTones = [
+  { id: 'tono', name: 'Tono su tono' },
+  { id: 'grafite', name: 'Grafite', color: '#2f2d2a', roughness: .55, metalness: 0 },
+  { id: 'oro', name: 'Oro satinato', color: '#c59b5f', roughness: .32, metalness: .9 },
 ]
 
-export const products = references.map(([name, label, image, description], index) => ({
-  id: String(index + 1).padStart(2, '0'),
-  name,
-  label,
-  description,
-  image: `/images/${image}.webp`,
-  model: null,
-  finishMaterials: [],
-  engraving: null,
-}))
+export const fonts = [
+  { id: 'classico', name: 'Classico', url: '/fonts/serif.json' },
+  { id: 'elegante', name: 'Elegante', url: '/fonts/elegante.json' },
+  { id: 'moderno', name: 'Moderno', url: '/fonts/moderno.json' },
+]
 
-export const integration = {
-  engravingEndpoint: null,
-  roomRenderEndpoint: null,
-}
+/**
+ * Modelli 3D configurabili. `model` è un GLB qualsiasi (asse Y in alto): viene riscalato
+ * all'altezza reale `height` (mm). Sostituendo il file si sostituisce il prodotto.
+ */
+export const products = [
+  {
+    id: 'vaso-alto', name: 'Vaso Onda', detail: 'Alto · 320 mm', model: '/models/vaso-onda-alto.glb', height: 320,
+    mark: { heightPct: 18, size: 62 },
+    description: 'Silhouette slanciata con otto onde sovrapposte. Elemento iconico per hall e suite.',
+  },
+  {
+    id: 'vaso-basso', name: 'Vaso Onda', detail: 'Basso · 200 mm', model: '/models/vaso-onda-basso.glb', height: 200,
+    mark: { heightPct: 24, size: 58 },
+    description: 'Forma raccolta a dodici petali, pensata per tavoli, reception e centrotavola.',
+  },
+  {
+    id: 'portaspazzolini', name: 'Portaspazzolini', detail: 'Bagno · 115 mm', model: '/models/portaspazzolini.glb', height: 115,
+    mark: { heightPct: 30, size: 40 },
+    description: 'Contenitore aperto per il piano lavabo, con onda alta e base pulita per il marchio.',
+  },
+]
+
+export const demoMark = { line1: 'GRAND HOTEL', line2: "PARKER'S", stars: 5, font: 'classico' }
+
+export const collection = [
+  ['Vasi scultorei', 'Elementi iconici per hall e suite', 'vases'],
+  ['Posacenere di design', 'Eleganza e funzionalità', 'ashtray'],
+  ['Portaspazzolini', 'Igiene e stile in una forma compatta', 'oral-care'],
+  ['Copri portafazzoletti', 'Custodia per box standard', 'tissue'],
+  ['Set cortesia', 'Organizzazione raffinata', 'amenities'],
+  ['Room sign', 'Segnaletica personalizzata', 'room-sign'],
+  ['Centrotavola', 'Design scenografico', 'centerpiece'],
+]
+
+export const sectors = [
+  ['Hotel & Resort', 'bed'],
+  ['Ristoranti & Lounge', 'cloche'],
+  ['SPA & Wellness', 'lotus'],
+  ['Uffici & Hospitality', 'people'],
+  ['Retail & Concept Store', 'bag'],
+  ['Eventi & Fiere', 'star'],
+]

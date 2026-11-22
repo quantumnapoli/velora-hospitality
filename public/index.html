@@ -1,21 +1,28 @@
 <!doctype html>
-<html lang="en">
+<html lang="it">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#191713">
-  <meta name="description" content="Velora is a contemporary Italian design studio for distinctive hospitality spaces.">
-  <title>Velora — Objects for Hospitality</title>
+  <meta name="theme-color" content="#241d19">
+  <title>Velora — Oggetti di design stampati in 3D per l'ospitalità</title>
+  <meta name="description" content="Vasi, accessori bagno e segnaletica stampati in 3D per hotel, resort e spazi esclusivi. Configura forma, finitura e marchio in rilievo direttamente sul modello 3D.">
+  <meta property="og:title" content="Velora — 3D Design Objects">
+  <meta property="og:description" content="Oggetti scultorei con il tuo marchio, stampati in 3D per hotel e resort.">
+  <meta property="og:image" content="/images/velora-suite.webp">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="preload" href="/images/velora-gallery.webp" as="image" media="(min-width: 681px)">
+  <link rel="preload" href="/models/vaso-onda-alto.glb" as="fetch" type="model/gltf-binary" crossorigin>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=Jost:wght@300;400;500&family=Marcellus&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/app.css">
 </head>
-<body><div id="root"></div>
-<form name="commission" method="POST" data-netlify="true" netlify-honeypot="website" hidden>
-  <input name="website"><input name="name"><input name="email"><input name="property"><input name="message"><textarea name="collection"></textarea><input name="logo" type="file">
+<body>
+<div id="root"></div>
+<form name="preventivo" method="POST" data-netlify="true" netlify-honeypot="website" hidden>
+  <input name="website"><input name="nome"><input name="email"><input name="struttura"><input name="telefono"><input name="quantita">
+  <textarea name="note"></textarea><textarea name="configurazione"></textarea>
+  <input name="logo" type="file"><input name="anteprima" type="file">
 </form>
-<script type="module" src="/app.js"></script></body>
+<script type="module" src="/app.js"></script>
+</body>
 </html>
